@@ -10,11 +10,11 @@ Menubar app for KAS Filesync.
 import os
 import subprocess
 
-# Hide Python icon from Dock (must be before importing rumps)
+# Hide Python icon from Dock
 try:
     import AppKit
-    info = AppKit.NSBundle.mainBundle().infoDictionary()
-    info["LSBackgroundOnly"] = "1"
+    # NSApplicationActivationPolicyAccessory = 1 (no dock icon, but can have menu bar)
+    AppKit.NSApplication.sharedApplication().setActivationPolicy_(1)
 except Exception:
     pass
 
