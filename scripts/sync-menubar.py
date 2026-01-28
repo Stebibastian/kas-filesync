@@ -11,7 +11,7 @@ import os
 import subprocess
 import rumps
 
-LOG_FILE = os.path.expanduser("~/Scripts/sync-files.log")
+LOG_FILE = os.path.expanduser("~/Library/Application Support/KAS Filesync/sync-files.log")
 DAEMON_LABEL = "com.realview.sync-files"
 DAEMON_PLIST = os.path.expanduser("~/Library/LaunchAgents/com.realview.sync-files.plist")
 
@@ -105,7 +105,7 @@ class SyncMenuBarApp(rumps.App):
 
     def open_manager(self, _):
         """Open the sync manager window."""
-        manager_script = os.path.expanduser("~/Scripts/sync-manager.py")
+        manager_script = os.path.expanduser("~/Library/Application Support/KAS Filesync/sync-manager.py")
         subprocess.Popen(["python3", manager_script])
 
     def show_log(self, _):

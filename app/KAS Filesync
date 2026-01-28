@@ -4,8 +4,8 @@
 # Installs dependencies if needed and starts the menubar app
 #
 
-SCRIPTS_DIR="$HOME/Scripts"
-LOG_FILE="$SCRIPTS_DIR/kas-filesync-launcher.log"
+SUPPORT_DIR="$HOME/Library/Application Support/KAS Filesync"
+LOG_FILE="$SUPPORT_DIR/kas-filesync-launcher.log"
 
 log() {
     echo "$(date '+%Y-%m-%d %H:%M:%S') $1" >> "$LOG_FILE"
@@ -39,7 +39,7 @@ if pgrep -f "sync-menubar.py" > /dev/null; then
     log "Menubar app already running"
 else
     log "Starting menubar app..."
-    python3 "$SCRIPTS_DIR/sync-menubar.py" &
+    python3 "$SUPPORT_DIR/sync-menubar.py" &
     log "Menubar app started with PID $!"
 fi
 
