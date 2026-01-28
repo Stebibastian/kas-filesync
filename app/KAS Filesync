@@ -16,65 +16,88 @@ log() {
 
 log "=== KAS Filesync starting ==="
 
-# Setup PATH for Homebrew (both Intel and Apple Silicon) and Python user bin
-export PATH="/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin:$HOME/Library/Python/3.13/bin:$HOME/Library/Python/3.12/bin:$HOME/Library/Python/3.11/bin:$PATH"
+# Setup PATH for Homebrew, Framework Python, and user bin
+export PATH="/Library/Frameworks/Python.framework/Versions/Current/bin:/Library/Frameworks/Python.framework/Versions/3.13/bin:/Library/Frameworks/Python.framework/Versions/3.12/bin:/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin:$PATH"
 
-# Find Python3
+# All candidate Python paths (order: Framework Python first, then Homebrew, then system)
+PYTHON_CANDIDATES=(
+    /Library/Frameworks/Python.framework/Versions/3.13/bin/python3
+    /Library/Frameworks/Python.framework/Versions/3.12/bin/python3
+    /Library/Frameworks/Python.framework/Versions/Current/bin/python3
+    /opt/homebrew/bin/python3
+    /usr/local/bin/python3
+    /usr/bin/python3
+)
+
+# Find the Python that can import rumps
 PYTHON3=""
-for p in /opt/homebrew/bin/python3 /usr/local/bin/python3 /usr/bin/python3 /Library/Frameworks/Python.framework/Versions/Current/bin/python3; do
+for p in "${PYTHON_CANDIDATES[@]}"; do
     if [ -x "$p" ]; then
-        PYTHON3="$p"
-        break
+        log "Trying: $p"
+        # Get this Python's user site-packages
+        PY_USER_SITE=$("$p" -m site --user-site 2>/dev/null)
+        if [ -n "$PY_USER_SITE" ]; then
+            export PYTHONPATH="$PY_USER_SITE"
+        fi
+        if "$p" -c "import rumps" 2>/dev/null; then
+            PYTHON3="$p"
+            log "Found Python with rumps: $p"
+            break
+        fi
+        log "  $p: rumps not found"
     fi
 done
 
+# If no Python has rumps, use the first available and try to install
 if [ -z "$PYTHON3" ]; then
-    PYTHON3=$(command -v python3 2>/dev/null)
-fi
+    log "No Python with rumps found, picking first available..."
+    for p in "${PYTHON_CANDIDATES[@]}"; do
+        if [ -x "$p" ]; then
+            PYTHON3="$p"
+            break
+        fi
+    done
 
-if [ -z "$PYTHON3" ]; then
-    log "ERROR: Python 3 not found"
-    osascript -e 'display alert "KAS Filesync" message "Python 3 nicht gefunden. Bitte installieren Sie Python 3."'
-    exit 1
-fi
-
-log "Using Python: $PYTHON3"
-
-# Get Python user site-packages and add to PYTHONPATH
-USER_SITE=$("$PYTHON3" -m site --user-site 2>/dev/null)
-if [ -n "$USER_SITE" ]; then
-    export PYTHONPATH="${USER_SITE}${PYTHONPATH:+:$PYTHONPATH}"
-    log "User site-packages: $USER_SITE"
-fi
-
-# Also add common user site-packages paths
-PY_VERSION=$("$PYTHON3" -c "import sys; print(f'{sys.version_info.major}.{sys.version_info.minor}')" 2>/dev/null)
-if [ -n "$PY_VERSION" ]; then
-    USER_PKG_DIR="$HOME/Library/Python/$PY_VERSION/lib/python/site-packages"
-    if [ -d "$USER_PKG_DIR" ]; then
-        export PYTHONPATH="${USER_PKG_DIR}${PYTHONPATH:+:$PYTHONPATH}"
-        log "Added user packages: $USER_PKG_DIR"
+    # Last resort
+    if [ -z "$PYTHON3" ]; then
+        PYTHON3=$(command -v python3 2>/dev/null)
     fi
-fi
 
-log "PYTHONPATH: $PYTHONPATH"
+    if [ -z "$PYTHON3" ]; then
+        log "ERROR: Python 3 not found anywhere"
+        osascript -e 'display alert "KAS Filesync" message "Python 3 nicht gefunden. Bitte installieren Sie Python 3."'
+        exit 1
+    fi
 
-# Check if rumps is importable
-if ! "$PYTHON3" -c "import rumps" 2>/dev/null; then
-    log "rumps not found, attempting install..."
+    log "Using Python: $PYTHON3 (rumps not yet available)"
+
+    # Set user site-packages for this Python
+    PY_USER_SITE=$("$PYTHON3" -m site --user-site 2>/dev/null)
+    if [ -n "$PY_USER_SITE" ]; then
+        export PYTHONPATH="$PY_USER_SITE"
+        log "User site-packages: $PY_USER_SITE"
+    fi
+
+    # Try to install rumps
+    log "Installing rumps..."
     "$PYTHON3" -m pip install --user --break-system-packages rumps >> "$LOG_FILE" 2>&1 \
-        || "$PYTHON3" -m pip install --user rumps >> "$LOG_FILE" 2>&1
+        || "$PYTHON3" -m pip install --user rumps >> "$LOG_FILE" 2>&1 \
+        || "$PYTHON3" -m pip install rumps >> "$LOG_FILE" 2>&1
 
-    # Re-check after install
+    # Verify
     if ! "$PYTHON3" -c "import rumps" 2>/dev/null; then
-        log "ERROR: rumps still not importable after install"
+        log "ERROR: rumps still not importable"
+        log "Python: $PYTHON3"
+        log "PYTHONPATH: $PYTHONPATH"
+        "$PYTHON3" -c "import sys; print('sys.path:', sys.path)" >> "$LOG_FILE" 2>&1
         osascript -e 'display alert "KAS Filesync" message "Konnte rumps nicht laden. Bitte im Terminal ausführen: pip3 install rumps"'
         exit 1
     fi
-    log "rumps installed successfully"
-else
-    log "rumps already available"
+    log "rumps installed and importable"
 fi
+
+log "Using Python: $PYTHON3"
+log "PYTHONPATH: $PYTHONPATH"
 
 # Check if menubar app is already running
 if pgrep -f "sync-menubar.py" > /dev/null; then
