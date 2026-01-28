@@ -1,45 +1,131 @@
 #!/bin/bash
 #
 # KAS Filesync Launcher
-# Installs dependencies if needed and starts the menubar app
+# Starts the menubar app with proper environment setup
 #
 
 SUPPORT_DIR="$HOME/Library/Application Support/KAS Filesync"
 LOG_FILE="$SUPPORT_DIR/kas-filesync-launcher.log"
 
+# Ensure support directory exists
+mkdir -p "$SUPPORT_DIR"
+
 log() {
     echo "$(date '+%Y-%m-%d %H:%M:%S') $1" >> "$LOG_FILE"
 }
 
+# Clear old log on launch
+echo "" > "$LOG_FILE"
 log "=== KAS Filesync starting ==="
 
-# Check and install Python packages
-check_and_install() {
-    local package=$1
-    if ! python3 -c "import $package" 2>/dev/null; then
-        log "Installing $package..."
-        pip3 install --user "$package" >> "$LOG_FILE" 2>&1
-        if [ $? -eq 0 ]; then
-            log "$package installed successfully"
-        else
-            log "ERROR: Failed to install $package"
-            osascript -e "display alert \"KAS Filesync\" message \"Konnte $package nicht installieren. Bitte manuell installieren: pip3 install $package\""
-            exit 1
-        fi
-    else
-        log "$package already installed"
-    fi
-}
+# Setup PATH
+export PATH="/Library/Frameworks/Python.framework/Versions/3.13/bin:/Library/Frameworks/Python.framework/Versions/3.12/bin:/Library/Frameworks/Python.framework/Versions/Current/bin:/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin:$PATH"
 
-# Required packages
-check_and_install "rumps"
+# All candidate Python paths
+# Order matters: python.org versioned binaries first (most reliable),
+# then framework, then homebrew, then system.
+# NOTE: /usr/bin/python3 on modern macOS is Xcode CLT Python (old pip, can't build wheels)
+PYTHON_CANDIDATES=(
+    /usr/local/bin/python3.13
+    /usr/local/bin/python3.12
+    /usr/local/bin/python3.11
+    /Library/Frameworks/Python.framework/Versions/3.13/bin/python3.13
+    /Library/Frameworks/Python.framework/Versions/3.13/bin/python3
+    /Library/Frameworks/Python.framework/Versions/3.12/bin/python3.12
+    /Library/Frameworks/Python.framework/Versions/3.12/bin/python3
+    /Library/Frameworks/Python.framework/Versions/Current/bin/python3
+    /opt/homebrew/bin/python3
+    /usr/local/bin/python3
+    /usr/bin/python3
+)
+
+log "Searching for Python with rumps..."
+
+# Find the Python that can import rumps
+PYTHON3=""
+for p in "${PYTHON_CANDIDATES[@]}"; do
+    if [ -x "$p" ]; then
+        log "  Trying: $p"
+        # Set this Python's user site-packages so import can find rumps
+        PY_USER_SITE=$("$p" -m site --user-site 2>/dev/null)
+        if [ -n "$PY_USER_SITE" ]; then
+            export PYTHONPATH="$PY_USER_SITE"
+        fi
+        if "$p" -c "import rumps" 2>/dev/null; then
+            PYTHON3="$p"
+            log "  -> Found Python with rumps: $p"
+            break
+        fi
+        log "  -> rumps not available"
+    fi
+done
+
+# If no Python has rumps, pick the best one to install with
+if [ -z "$PYTHON3" ]; then
+    log "No Python with rumps found, picking best available for install..."
+
+    # Prefer python.org Python (modern pip, can build wheels)
+    # Explicitly SKIP /usr/bin/python3 (Xcode CLT Python with ancient pip)
+    for p in "${PYTHON_CANDIDATES[@]}"; do
+        if [ -x "$p" ] && [ "$p" != "/usr/bin/python3" ]; then
+            PYTHON3="$p"
+            log "  Selected for install: $p"
+            break
+        fi
+    done
+
+    # Absolute last resort: use /usr/bin/python3
+    if [ -z "$PYTHON3" ] && [ -x "/usr/bin/python3" ]; then
+        PYTHON3="/usr/bin/python3"
+        log "  Last resort: $PYTHON3"
+    fi
+
+    if [ -z "$PYTHON3" ]; then
+        log "ERROR: No Python 3 found"
+        osascript -e 'display alert "KAS Filesync" message "Python 3 nicht gefunden. Bitte Python 3 von python.org installieren."'
+        exit 1
+    fi
+
+    # Set user site-packages
+    PY_USER_SITE=$("$PYTHON3" -m site --user-site 2>/dev/null)
+    if [ -n "$PY_USER_SITE" ]; then
+        export PYTHONPATH="$PY_USER_SITE"
+        log "  User site-packages: $PY_USER_SITE"
+    fi
+
+    # First upgrade pip if needed
+    log "  Upgrading pip..."
+    "$PYTHON3" -m pip install --user --break-system-packages --upgrade pip >> "$LOG_FILE" 2>&1 \
+        || "$PYTHON3" -m pip install --user --upgrade pip >> "$LOG_FILE" 2>&1 \
+        || true
+
+    # Install rumps
+    log "  Installing rumps..."
+    "$PYTHON3" -m pip install --user --break-system-packages rumps >> "$LOG_FILE" 2>&1 \
+        || "$PYTHON3" -m pip install --user rumps >> "$LOG_FILE" 2>&1 \
+        || "$PYTHON3" -m pip install rumps >> "$LOG_FILE" 2>&1
+
+    # Verify
+    if ! "$PYTHON3" -c "import rumps" 2>/dev/null; then
+        log "ERROR: rumps not importable after install"
+        log "Python: $PYTHON3"
+        log "PYTHONPATH: $PYTHONPATH"
+        "$PYTHON3" -c "import sys; print('sys.path:', sys.path)" >> "$LOG_FILE" 2>&1
+        osascript -e 'display alert "KAS Filesync" message "Konnte rumps nicht laden.\n\nBitte im Terminal ausführen:\n  pip3 install rumps\n\nLog: ~/Library/Application Support/KAS Filesync/kas-filesync-launcher.log"'
+        exit 1
+    fi
+    log "  rumps installed successfully"
+fi
+
+log "Python: $PYTHON3"
+log "PYTHONPATH: $PYTHONPATH"
 
 # Check if menubar app is already running
 if pgrep -f "sync-menubar.py" > /dev/null; then
     log "Menubar app already running"
 else
     log "Starting menubar app..."
-    python3 "$SUPPORT_DIR/sync-menubar.py" &
+    "$PYTHON3" "$SUPPORT_DIR/sync-menubar.py" >> "$LOG_FILE" 2>&1 &
     log "Menubar app started with PID $!"
 fi
 
