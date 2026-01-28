@@ -118,7 +118,10 @@ fi
 
 # Install Python packages
 echo "→ Installiere Python-Pakete..."
-pip3 install --user rumps 2>/dev/null || pip3 install rumps
+pip3 install --user --break-system-packages rumps 2>/dev/null \
+    || pip3 install --break-system-packages rumps 2>/dev/null \
+    || pip3 install --user rumps 2>/dev/null \
+    || pip3 install rumps
 echo "  ✓ rumps installiert"
 
 # Copy scripts to Application Support
