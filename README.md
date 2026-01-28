@@ -2,8 +2,6 @@
 
 Bidirektionale Dateisynchronisation für macOS mit Menubar-Integration.
 
-![KAS Filesync](docs/screenshot.png)
-
 ## Features
 
 - **Bidirektionale Synchronisation** – Änderungen werden in beide Richtungen synchronisiert
