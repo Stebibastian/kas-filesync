@@ -10,7 +10,7 @@ import os
 import sys
 
 LOCK_FILE = "/tmp/sync-manager.lock"
-CONFIG = os.path.expanduser("~/Scripts/sync-config.json")
+CONFIG = os.path.expanduser("~/Library/Application Support/KAS Filesync/sync-config.json")
 
 import objc
 from AppKit import (
