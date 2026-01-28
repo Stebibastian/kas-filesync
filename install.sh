@@ -10,14 +10,29 @@ echo "║       KAS Filesync Installer           ║"
 echo "╚════════════════════════════════════════╝"
 echo ""
 
-SCRIPTS_DIR="$HOME/Scripts"
-APP_DIR="$HOME/Applications"
-REPO_DIR="$(cd "$(dirname "$0")" && pwd)"
+# Installation directories
+APP_DIR="/Applications"
+SUPPORT_DIR="$HOME/Library/Application Support/KAS Filesync"
+REPO_URL="https://github.com/Stebibastian/kas-filesync"
 
-# Create directories
+# Create temporary directory for download
+TEMP_DIR=$(mktemp -d)
+trap "rm -rf $TEMP_DIR" EXIT
+
+# Download repository
+echo "→ Lade Repository herunter..."
+if command -v git &> /dev/null; then
+    git clone --depth 1 "$REPO_URL" "$TEMP_DIR/kas-filesync" 2>/dev/null
+else
+    curl -sL "$REPO_URL/archive/main.tar.gz" | tar xz -C "$TEMP_DIR"
+    mv "$TEMP_DIR/kas-filesync-main" "$TEMP_DIR/kas-filesync"
+fi
+REPO_DIR="$TEMP_DIR/kas-filesync"
+echo "  ✓ Repository heruntergeladen"
+
+# Create support directory
 echo "→ Erstelle Verzeichnisse..."
-mkdir -p "$SCRIPTS_DIR"
-mkdir -p "$APP_DIR"
+mkdir -p "$SUPPORT_DIR"
 
 # Check for fswatch
 echo "→ Prüfe Abhängigkeiten..."
@@ -48,16 +63,16 @@ echo "→ Installiere Python-Pakete..."
 pip3 install --user rumps 2>/dev/null || pip3 install rumps
 echo "  ✓ rumps installiert"
 
-# Copy scripts
+# Copy scripts to Application Support
 echo "→ Kopiere Scripts..."
-cp "$REPO_DIR/scripts/sync-files.py" "$SCRIPTS_DIR/"
-cp "$REPO_DIR/scripts/sync-menubar.py" "$SCRIPTS_DIR/"
-cp "$REPO_DIR/scripts/sync-manager.py" "$SCRIPTS_DIR/"
-echo "  ✓ Scripts kopiert nach $SCRIPTS_DIR"
+cp "$REPO_DIR/scripts/sync-files.py" "$SUPPORT_DIR/"
+cp "$REPO_DIR/scripts/sync-menubar.py" "$SUPPORT_DIR/"
+cp "$REPO_DIR/scripts/sync-manager.py" "$SUPPORT_DIR/"
+echo "  ✓ Scripts kopiert nach $SUPPORT_DIR"
 
 # Create config if not exists
-if [ ! -f "$SCRIPTS_DIR/sync-config.json" ]; then
-    echo '{"pairs": []}' > "$SCRIPTS_DIR/sync-config.json"
+if [ ! -f "$SUPPORT_DIR/sync-config.json" ]; then
+    echo '{"pairs": []}' > "$SUPPORT_DIR/sync-config.json"
     echo "  ✓ Konfiguration erstellt"
 fi
 
