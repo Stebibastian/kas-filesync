@@ -14,8 +14,8 @@ import time
 from datetime import datetime
 from pathlib import Path
 
-CONFIG = os.path.expanduser("~/Scripts/sync-config.json")
-LOG_FILE = os.path.expanduser("~/Scripts/sync-files.log")
+CONFIG = os.path.expanduser("~/Library/Application Support/KAS Filesync/sync-config.json")
+LOG_FILE = os.path.expanduser("~/Library/Application Support/KAS Filesync/sync-files.log")
 LOCK_DIR = "/tmp/sync-files-locks"
 
 
