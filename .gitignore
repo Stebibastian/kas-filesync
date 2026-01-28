@@ -1,0 +1,14 @@
+# macOS
+.DS_Store
+*.swp
+
+# Python
+__pycache__/
+*.pyc
+*.pyo
+
+# Logs
+*.log
+
+# Config (user-specific)
+sync-config.json
