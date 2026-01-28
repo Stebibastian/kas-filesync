@@ -1,6 +1,7 @@
 #!/bin/bash
 #
 # KAS Filesync Installer
+# Supports fresh install and updates
 #
 
 set -e
@@ -12,8 +13,57 @@ echo ""
 
 # Installation directories
 APP_DIR="/Applications"
+APP_PATH="$APP_DIR/KAS Filesync.app"
 SUPPORT_DIR="$HOME/Library/Application Support/KAS Filesync"
 REPO_URL="https://github.com/Stebibastian/kas-filesync"
+
+# Check if this is an update
+IS_UPDATE=false
+if [ -d "$APP_PATH" ] || [ -d "$SUPPORT_DIR" ]; then
+    IS_UPDATE=true
+    echo "→ Bestehende Installation gefunden"
+    echo "  → Update wird durchgeführt..."
+    echo ""
+fi
+
+# Cleanup old installation directories (from previous versions)
+cleanup_old_dirs() {
+    echo "→ Bereinige alte Verzeichnisse..."
+
+    # Old scripts directory
+    if [ -d "$HOME/Scripts" ]; then
+        if [ -f "$HOME/Scripts/sync-files.py" ] || [ -f "$HOME/Scripts/sync-menubar.py" ]; then
+            echo "  → Entferne alte Scripts aus ~/Scripts..."
+            rm -f "$HOME/Scripts/sync-files.py"
+            rm -f "$HOME/Scripts/sync-menubar.py"
+            rm -f "$HOME/Scripts/sync-manager.py"
+            rm -f "$HOME/Scripts/sync-config.json"
+            rm -f "$HOME/Scripts/sync-files.log"
+            rm -f "$HOME/Scripts/kas-filesync-launcher.log"
+            # Remove directory if empty
+            rmdir "$HOME/Scripts" 2>/dev/null || true
+        fi
+    fi
+
+    # Old app in user Applications
+    if [ -d "$HOME/Applications/KAS Filesync.app" ]; then
+        echo "  → Entferne alte App aus ~/Applications..."
+        rm -rf "$HOME/Applications/KAS Filesync.app"
+        rmdir "$HOME/Applications" 2>/dev/null || true
+    fi
+
+    echo "  ✓ Bereinigung abgeschlossen"
+}
+
+# Stop running instances before update
+stop_running_instances() {
+    if pgrep -f "sync-menubar.py" > /dev/null 2>&1; then
+        echo "→ Stoppe laufende Instanz..."
+        pkill -f "sync-menubar.py" 2>/dev/null || true
+        sleep 1
+        echo "  ✓ Instanz gestoppt"
+    fi
+}
 
 # Create temporary directory for download
 TEMP_DIR=$(mktemp -d)
@@ -29,6 +79,14 @@ else
 fi
 REPO_DIR="$TEMP_DIR/kas-filesync"
 echo "  ✓ Repository heruntergeladen"
+
+# Cleanup old directories
+cleanup_old_dirs
+
+# Stop running instances if updating
+if [ "$IS_UPDATE" = true ]; then
+    stop_running_instances
+fi
 
 # Create support directory
 echo "→ Erstelle Verzeichnisse..."
@@ -70,15 +128,16 @@ cp "$REPO_DIR/scripts/sync-menubar.py" "$SUPPORT_DIR/"
 cp "$REPO_DIR/scripts/sync-manager.py" "$SUPPORT_DIR/"
 echo "  ✓ Scripts kopiert nach $SUPPORT_DIR"
 
-# Create config if not exists
+# Create config if not exists (preserve existing config on update)
 if [ ! -f "$SUPPORT_DIR/sync-config.json" ]; then
     echo '{"pairs": []}' > "$SUPPORT_DIR/sync-config.json"
     echo "  ✓ Konfiguration erstellt"
+else
+    echo "  ✓ Bestehende Konfiguration beibehalten"
 fi
 
 # Create app bundle
 echo "→ Erstelle App..."
-APP_PATH="$APP_DIR/KAS Filesync.app"
 rm -rf "$APP_PATH"
 mkdir -p "$APP_PATH/Contents/MacOS"
 mkdir -p "$APP_PATH/Contents/Resources"
@@ -99,9 +158,15 @@ cp "$REPO_DIR/app/AppIcon.icns" "$APP_PATH/Contents/Resources/"
 echo "  ✓ App erstellt: $APP_PATH"
 
 echo ""
-echo "╔════════════════════════════════════════╗"
-echo "║         Installation abgeschlossen     ║"
-echo "╚════════════════════════════════════════╝"
+if [ "$IS_UPDATE" = true ]; then
+    echo "╔════════════════════════════════════════╗"
+    echo "║           Update abgeschlossen         ║"
+    echo "╚════════════════════════════════════════╝"
+else
+    echo "╔════════════════════════════════════════╗"
+    echo "║         Installation abgeschlossen     ║"
+    echo "╚════════════════════════════════════════╝"
+fi
 echo ""
 echo "Starte die App:"
 echo "  open \"$APP_PATH\""
@@ -109,4 +174,7 @@ echo ""
 echo "Oder suche 'KAS Filesync' in Spotlight."
 echo ""
 echo "Für Autostart: Systemeinstellungen → Anmeldeobjekte"
+echo ""
+echo "Update jederzeit mit:"
+echo "  curl -fsSL https://raw.githubusercontent.com/Stebibastian/kas-filesync/main/install.sh | bash"
 echo ""
