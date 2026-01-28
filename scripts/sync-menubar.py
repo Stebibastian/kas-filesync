@@ -9,6 +9,15 @@ Menubar app for KAS Filesync.
 
 import os
 import subprocess
+
+# Hide Python icon from Dock (must be before importing rumps)
+try:
+    import AppKit
+    info = AppKit.NSBundle.mainBundle().infoDictionary()
+    info["LSBackgroundOnly"] = "1"
+except Exception:
+    pass
+
 import rumps
 
 LOG_FILE = os.path.expanduser("~/Library/Application Support/KAS Filesync/sync-files.log")
