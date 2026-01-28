@@ -1,0 +1,46 @@
+#!/bin/bash
+#
+# KAS Filesync Launcher
+# Installs dependencies if needed and starts the menubar app
+#
+
+SCRIPTS_DIR="$HOME/Scripts"
+LOG_FILE="$SCRIPTS_DIR/kas-filesync-launcher.log"
+
+log() {
+    echo "$(date '+%Y-%m-%d %H:%M:%S') $1" >> "$LOG_FILE"
+}
+
+log "=== KAS Filesync starting ==="
+
+# Check and install Python packages
+check_and_install() {
+    local package=$1
+    if ! python3 -c "import $package" 2>/dev/null; then
+        log "Installing $package..."
+        pip3 install --user "$package" >> "$LOG_FILE" 2>&1
+        if [ $? -eq 0 ]; then
+            log "$package installed successfully"
+        else
+            log "ERROR: Failed to install $package"
+            osascript -e "display alert \"KAS Filesync\" message \"Konnte $package nicht installieren. Bitte manuell installieren: pip3 install $package\""
+            exit 1
+        fi
+    else
+        log "$package already installed"
+    fi
+}
+
+# Required packages
+check_and_install "rumps"
+
+# Check if menubar app is already running
+if pgrep -f "sync-menubar.py" > /dev/null; then
+    log "Menubar app already running"
+else
+    log "Starting menubar app..."
+    python3 "$SCRIPTS_DIR/sync-menubar.py" &
+    log "Menubar app started with PID $!"
+fi
+
+log "=== Launcher finished ==="
