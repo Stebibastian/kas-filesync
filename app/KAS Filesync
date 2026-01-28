@@ -16,19 +16,20 @@ log() {
 
 log "=== KAS Filesync starting ==="
 
-# Setup PATH for Homebrew (both Intel and Apple Silicon)
-export PATH="/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin:$PATH"
+# Setup PATH for Homebrew (both Intel and Apple Silicon) and Python user bin
+export PATH="/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin:$HOME/Library/Python/3.13/bin:$HOME/Library/Python/3.12/bin:$HOME/Library/Python/3.11/bin:$PATH"
 
 # Find Python3
 PYTHON3=""
-if command -v python3 &> /dev/null; then
-    PYTHON3=$(command -v python3)
-elif [ -x "/opt/homebrew/bin/python3" ]; then
-    PYTHON3="/opt/homebrew/bin/python3"
-elif [ -x "/usr/local/bin/python3" ]; then
-    PYTHON3="/usr/local/bin/python3"
-elif [ -x "/usr/bin/python3" ]; then
-    PYTHON3="/usr/bin/python3"
+for p in /opt/homebrew/bin/python3 /usr/local/bin/python3 /usr/bin/python3 /Library/Frameworks/Python.framework/Versions/Current/bin/python3; do
+    if [ -x "$p" ]; then
+        PYTHON3="$p"
+        break
+    fi
+done
+
+if [ -z "$PYTHON3" ]; then
+    PYTHON3=$(command -v python3 2>/dev/null)
 fi
 
 if [ -z "$PYTHON3" ]; then
@@ -39,26 +40,41 @@ fi
 
 log "Using Python: $PYTHON3"
 
-# Check and install Python packages
-check_and_install() {
-    local package=$1
-    if ! "$PYTHON3" -c "import $package" 2>/dev/null; then
-        log "Installing $package..."
-        "$PYTHON3" -m pip install --user "$package" >> "$LOG_FILE" 2>&1
-        if [ $? -eq 0 ]; then
-            log "$package installed successfully"
-        else
-            log "ERROR: Failed to install $package"
-            osascript -e "display alert \"KAS Filesync\" message \"Konnte $package nicht installieren. Bitte manuell installieren: pip3 install $package\""
-            exit 1
-        fi
-    else
-        log "$package already installed"
-    fi
-}
+# Get Python user site-packages and add to PYTHONPATH
+USER_SITE=$("$PYTHON3" -m site --user-site 2>/dev/null)
+if [ -n "$USER_SITE" ]; then
+    export PYTHONPATH="${USER_SITE}${PYTHONPATH:+:$PYTHONPATH}"
+    log "User site-packages: $USER_SITE"
+fi
 
-# Required packages
-check_and_install "rumps"
+# Also add common user site-packages paths
+PY_VERSION=$("$PYTHON3" -c "import sys; print(f'{sys.version_info.major}.{sys.version_info.minor}')" 2>/dev/null)
+if [ -n "$PY_VERSION" ]; then
+    USER_PKG_DIR="$HOME/Library/Python/$PY_VERSION/lib/python/site-packages"
+    if [ -d "$USER_PKG_DIR" ]; then
+        export PYTHONPATH="${USER_PKG_DIR}${PYTHONPATH:+:$PYTHONPATH}"
+        log "Added user packages: $USER_PKG_DIR"
+    fi
+fi
+
+log "PYTHONPATH: $PYTHONPATH"
+
+# Check if rumps is importable
+if ! "$PYTHON3" -c "import rumps" 2>/dev/null; then
+    log "rumps not found, attempting install..."
+    "$PYTHON3" -m pip install --user --break-system-packages rumps >> "$LOG_FILE" 2>&1 \
+        || "$PYTHON3" -m pip install --user rumps >> "$LOG_FILE" 2>&1
+
+    # Re-check after install
+    if ! "$PYTHON3" -c "import rumps" 2>/dev/null; then
+        log "ERROR: rumps still not importable after install"
+        osascript -e 'display alert "KAS Filesync" message "Konnte rumps nicht laden. Bitte im Terminal ausführen: pip3 install rumps"'
+        exit 1
+    fi
+    log "rumps installed successfully"
+else
+    log "rumps already available"
+fi
 
 # Check if menubar app is already running
 if pgrep -f "sync-menubar.py" > /dev/null; then
