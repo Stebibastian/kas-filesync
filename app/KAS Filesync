@@ -1,11 +1,14 @@
 #!/bin/bash
 #
 # KAS Filesync Launcher
-# Installs dependencies if needed and starts the menubar app
+# Starts the menubar app with proper environment setup
 #
 
 SUPPORT_DIR="$HOME/Library/Application Support/KAS Filesync"
 LOG_FILE="$SUPPORT_DIR/kas-filesync-launcher.log"
+
+# Ensure support directory exists
+mkdir -p "$SUPPORT_DIR"
 
 log() {
     echo "$(date '+%Y-%m-%d %H:%M:%S') $1" >> "$LOG_FILE"
@@ -13,12 +16,35 @@ log() {
 
 log "=== KAS Filesync starting ==="
 
+# Setup PATH for Homebrew (both Intel and Apple Silicon)
+export PATH="/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin:$PATH"
+
+# Find Python3
+PYTHON3=""
+if command -v python3 &> /dev/null; then
+    PYTHON3=$(command -v python3)
+elif [ -x "/opt/homebrew/bin/python3" ]; then
+    PYTHON3="/opt/homebrew/bin/python3"
+elif [ -x "/usr/local/bin/python3" ]; then
+    PYTHON3="/usr/local/bin/python3"
+elif [ -x "/usr/bin/python3" ]; then
+    PYTHON3="/usr/bin/python3"
+fi
+
+if [ -z "$PYTHON3" ]; then
+    log "ERROR: Python 3 not found"
+    osascript -e 'display alert "KAS Filesync" message "Python 3 nicht gefunden. Bitte installieren Sie Python 3."'
+    exit 1
+fi
+
+log "Using Python: $PYTHON3"
+
 # Check and install Python packages
 check_and_install() {
     local package=$1
-    if ! python3 -c "import $package" 2>/dev/null; then
+    if ! "$PYTHON3" -c "import $package" 2>/dev/null; then
         log "Installing $package..."
-        pip3 install --user "$package" >> "$LOG_FILE" 2>&1
+        "$PYTHON3" -m pip install --user "$package" >> "$LOG_FILE" 2>&1
         if [ $? -eq 0 ]; then
             log "$package installed successfully"
         else
@@ -39,7 +65,7 @@ if pgrep -f "sync-menubar.py" > /dev/null; then
     log "Menubar app already running"
 else
     log "Starting menubar app..."
-    python3 "$SUPPORT_DIR/sync-menubar.py" &
+    "$PYTHON3" "$SUPPORT_DIR/sync-menubar.py" >> "$LOG_FILE" 2>&1 &
     log "Menubar app started with PID $!"
 fi
 
