@@ -9,6 +9,7 @@ Menubar app for KAS Filesync.
 
 import os
 import subprocess
+import sys
 
 # Hide Python icon from Dock
 try:
@@ -20,23 +21,92 @@ except Exception:
 
 import rumps
 
-LOG_FILE = os.path.expanduser("~/Library/Application Support/KAS Filesync/sync-files.log")
-DAEMON_LABEL = "com.realview.sync-files"
-DAEMON_PLIST = os.path.expanduser("~/Library/LaunchAgents/com.realview.sync-files.plist")
+SUPPORT_DIR = os.path.expanduser("~/Library/Application Support/KAS Filesync")
+DAEMON_SCRIPT = os.path.join(SUPPORT_DIR, "sync-files.py")
+LOG_FILE = os.path.join(SUPPORT_DIR, "sync-files.log")
+PID_FILE = os.path.join(SUPPORT_DIR, "sync-daemon.pid")
 
 ICON_ACTIVE = "🔄"
 ICON_STOPPED = "⏸️"
 
 
 def is_daemon_running():
+    """Check if the sync daemon is running."""
+    # First check PID file
+    if os.path.exists(PID_FILE):
+        try:
+            with open(PID_FILE, "r") as f:
+                pid = int(f.read().strip())
+            # Check if process is still running
+            os.kill(pid, 0)
+            return True
+        except (ValueError, ProcessLookupError, PermissionError):
+            # PID file exists but process is dead
+            try:
+                os.remove(PID_FILE)
+            except OSError:
+                pass
+
+    # Fallback: check with pgrep
     try:
         result = subprocess.run(
-            ["launchctl", "list", DAEMON_LABEL],
+            ["pgrep", "-f", "sync-files.py"],
             capture_output=True, text=True
         )
         return result.returncode == 0
     except Exception:
         return False
+
+
+def start_daemon():
+    """Start the sync daemon."""
+    if is_daemon_running():
+        return True
+
+    try:
+        # Use the same Python that's running this script
+        python_path = sys.executable
+        proc = subprocess.Popen(
+            [python_path, DAEMON_SCRIPT],
+            stdout=open(os.path.join(SUPPORT_DIR, "sync-daemon-stdout.log"), "a"),
+            stderr=open(os.path.join(SUPPORT_DIR, "sync-daemon-stderr.log"), "a"),
+            start_new_session=True
+        )
+        # Save PID
+        with open(PID_FILE, "w") as f:
+            f.write(str(proc.pid))
+        return True
+    except Exception as e:
+        rumps.alert("Fehler", f"Konnte Daemon nicht starten: {e}")
+        return False
+
+
+def stop_daemon():
+    """Stop the sync daemon."""
+    stopped = False
+
+    # Try PID file first
+    if os.path.exists(PID_FILE):
+        try:
+            with open(PID_FILE, "r") as f:
+                pid = int(f.read().strip())
+            os.kill(pid, 15)  # SIGTERM
+            stopped = True
+        except (ValueError, ProcessLookupError, PermissionError):
+            pass
+        try:
+            os.remove(PID_FILE)
+        except OSError:
+            pass
+
+    # Also try pkill as fallback
+    try:
+        subprocess.run(["pkill", "-f", "sync-files.py"], capture_output=True)
+        stopped = True
+    except Exception:
+        pass
+
+    return stopped
 
 
 def get_last_log(n=10):
@@ -105,23 +175,25 @@ class SyncMenuBarApp(rumps.App):
 
     def toggle_sync(self, _):
         if is_daemon_running():
-            subprocess.run(["launchctl", "unload", DAEMON_PLIST], capture_output=True)
+            stop_daemon()
             rumps.notification("KAS Filesync", "Gestoppt", "Sync-Daemon wurde gestoppt.", sound=False)
         else:
-            subprocess.run(["launchctl", "load", DAEMON_PLIST], capture_output=True)
-            rumps.notification("KAS Filesync", "Gestartet", "Sync-Daemon wurde gestartet.", sound=False)
+            if start_daemon():
+                rumps.notification("KAS Filesync", "Gestartet", "Sync-Daemon wurde gestartet.", sound=False)
         self.update_status()
 
     def open_manager(self, _):
         """Open the sync manager window."""
-        manager_script = os.path.expanduser("~/Library/Application Support/KAS Filesync/sync-manager.py")
-        subprocess.Popen(["python3", manager_script])
+        manager_script = os.path.join(SUPPORT_DIR, "sync-manager.py")
+        subprocess.Popen([sys.executable, manager_script])
 
     def show_log(self, _):
         lines = get_last_log(12)
         rumps.alert(title="Sync Log", message=lines)
 
     def quit_app(self, _):
+        # Stop daemon when quitting
+        stop_daemon()
         rumps.quit_application()
 
 
