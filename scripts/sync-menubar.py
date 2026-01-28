@@ -9,6 +9,15 @@ Menubar app for KAS Filesync.
 
 import os
 import subprocess
+
+# Hide Python icon from Dock
+try:
+    import AppKit
+    # NSApplicationActivationPolicyAccessory = 1 (no dock icon, but can have menu bar)
+    AppKit.NSApplication.sharedApplication().setActivationPolicy_(1)
+except Exception:
+    pass
+
 import rumps
 
 LOG_FILE = os.path.expanduser("~/Library/Application Support/KAS Filesync/sync-files.log")
