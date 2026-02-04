@@ -29,15 +29,7 @@ debug_log(f"Python: {sys.executable}")
 debug_log(f"Python version: {sys.version}")
 debug_log(f"sys.path: {sys.path}")
 
-# Hide Python icon from Dock
-try:
-    import AppKit
-    # NSApplicationActivationPolicyAccessory = 1 (no dock icon, but can have menu bar)
-    AppKit.NSApplication.sharedApplication().setActivationPolicy_(1)
-    debug_log("AppKit loaded, dock icon hidden")
-except Exception as e:
-    debug_log(f"AppKit error (non-fatal): {e}")
-
+# Import rumps first
 try:
     import rumps
     debug_log(f"rumps loaded successfully from {rumps.__file__}")
@@ -45,12 +37,22 @@ except ImportError as e:
     debug_log(f"FATAL: Cannot import rumps: {e}")
     raise
 
+# Hide Python icon from Dock AFTER rumps import
+try:
+    import AppKit
+    # NSApplicationActivationPolicyAccessory = 1 (no dock icon, but can have menu bar)
+    AppKit.NSApplication.sharedApplication().setActivationPolicy_(1)
+    debug_log("AppKit: dock icon hidden")
+except Exception as e:
+    debug_log(f"AppKit error (non-fatal): {e}")
+
 DAEMON_SCRIPT = os.path.join(SUPPORT_DIR, "sync-files.py")
 LOG_FILE = os.path.join(SUPPORT_DIR, "sync-files.log")
 PID_FILE = os.path.join(SUPPORT_DIR, "sync-daemon.pid")
 
-ICON_ACTIVE = "🔄"
-ICON_STOPPED = "⏸️"
+# Simple text icons (emojis can cause issues on some systems)
+ICON_ACTIVE = "KAS"
+ICON_STOPPED = "kas"
 
 
 def is_daemon_running():
@@ -164,8 +166,11 @@ def get_last_log(n=10):
 
 class SyncMenuBarApp(rumps.App):
     def __init__(self):
-        super().__init__("KAS Filesync", quit_button=None)
+        debug_log("SyncMenuBarApp.__init__ starting")
+        super().__init__("KAS", quit_button=None)  # Start with simple title
+        debug_log("rumps.App.__init__ completed")
         self.build_menu()
+        debug_log("build_menu() completed")
 
     def build_menu(self):
         """Rebuild the entire menu from current config."""
