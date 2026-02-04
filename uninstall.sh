@@ -12,17 +12,30 @@ echo ""
 APP_PATH="/Applications/KAS Filesync.app"
 SUPPORT_DIR="$HOME/Library/Application Support/KAS Filesync"
 
+# Check for -y/--yes flag (skip confirmation)
+SKIP_CONFIRM=false
+for arg in "$@"; do
+    if [[ "$arg" == "-y" || "$arg" == "--yes" ]]; then
+        SKIP_CONFIRM=true
+    fi
+done
+
 # Confirm
 echo "Dies wird folgendes entfernen:"
 echo "  - $APP_PATH"
 echo "  - $SUPPORT_DIR (inkl. Konfiguration und Logs)"
 echo ""
-read -p "Fortfahren? (j/N) " -n 1 -r
-echo ""
 
-if [[ ! $REPLY =~ ^[JjYy]$ ]]; then
-    echo "Abgebrochen."
-    exit 0
+if [ "$SKIP_CONFIRM" = false ]; then
+    # Read from /dev/tty to work with pipe execution
+    printf "Fortfahren? (j/N) "
+    read -r REPLY < /dev/tty
+    echo ""
+
+    if [[ ! $REPLY =~ ^[JjYy]$ ]]; then
+        echo "Abgebrochen."
+        exit 0
+    fi
 fi
 
 echo ""
