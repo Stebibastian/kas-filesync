@@ -39,6 +39,17 @@ for p in /usr/local/bin/python3 /opt/homebrew/bin/python3 /usr/bin/python3; do
 done
 
 echo ""
+echo "=== App Installation ==="
+echo ""
+APP_PATH="/Applications/KAS Filesync.app"
+if [ -d "$APP_PATH" ]; then
+    echo "App found: $APP_PATH"
+    echo "Launcher exists: $([ -x "$APP_PATH/Contents/MacOS/KAS Filesync" ] && echo 'YES' || echo 'NO')"
+else
+    echo "App NOT FOUND at $APP_PATH"
+fi
+
+echo ""
 echo "=== Support Directory ==="
 echo ""
 echo "Path: $SUPPORT_DIR"
@@ -46,7 +57,7 @@ if [ -d "$SUPPORT_DIR" ]; then
     echo "Contents:"
     ls -la "$SUPPORT_DIR" 2>/dev/null
 else
-    echo "  Directory does not exist!"
+    echo "  Directory does not exist! (This is normal before first run)"
 fi
 
 echo ""
