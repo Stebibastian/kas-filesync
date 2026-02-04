@@ -5,10 +5,39 @@ Bidirektionale Dateisynchronisation für macOS mit Menubar-Integration.
 ## Features
 
 - **Bidirektionale Synchronisation** – Änderungen werden in beide Richtungen synchronisiert
+- **3-Wege-Merge** – Git-ähnliches Merging wenn beide Seiten Änderungen haben
+- **Automatische Konflikt-Erkennung** – Bei Konflikten werden Marker eingefügt
 - **Event-basiert** – Synct nur wenn sich eine Datei ändert (kein Polling)
 - **Menubar-App** – Statusanzeige und Steuerung direkt in der Menüleiste
 - **Verbindungs-Manager** – Natives macOS-Fenster zum Verwalten der Sync-Paare
 - **Autostart** – Kann bei der Anmeldung automatisch starten
+
+## Merge-Verhalten
+
+KAS Filesync verwendet einen intelligenten 3-Wege-Merge:
+
+1. **Eine Seite geändert** → Änderungen werden automatisch synchronisiert
+2. **Beide Seiten geändert (an verschiedenen Stellen)** → Automatisch gemergt
+3. **Beide Seiten geändert (an gleicher Stelle)** → Konflikt mit Markern
+
+### Konflikte auflösen
+
+Bei einem Konflikt werden Git-ähnliche Marker eingefügt:
+
+```
+<<<<<<< SOURCE
+Deine lokale Änderung
+=======
+Die andere Änderung
+>>>>>>> TARGET
+```
+
+1. Öffne die Datei in deinem Editor
+2. Entscheide welche Version du behalten willst
+3. Lösche die Marker und die ungewünschte Version
+4. Speichere die Datei
+
+Der Konflikt wird automatisch als gelöst erkannt und synchronisiert.
 
 ## Installation
 
@@ -67,9 +96,12 @@ Nach der Installation findest du **KAS Filesync** in `~/Applications/`.
 | Datei | Beschreibung |
 |-------|--------------|
 | `sync-files.py` | Sync-Daemon (event-basiert mit fswatch) |
+| `sync_merge.py` | 3-Wege-Merge Modul |
 | `sync-menubar.py` | Menubar-App |
 | `sync-manager.py` | Verbindungs-Manager (natives Fenster) |
 | `sync-config.json` | Konfiguration der Sync-Paare |
+| `bases/` | Gespeicherte Base-Versionen für Merge |
+| `conflicts.json` | Aktive Konflikte |
 
 ## Voraussetzungen
 

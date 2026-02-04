@@ -129,11 +129,14 @@ echo "→ Kopiere Scripts..."
 cp "$REPO_DIR/scripts/sync-files.py" "$SUPPORT_DIR/"
 cp "$REPO_DIR/scripts/sync-menubar.py" "$SUPPORT_DIR/"
 cp "$REPO_DIR/scripts/sync-manager.py" "$SUPPORT_DIR/"
+cp "$REPO_DIR/scripts/sync_merge.py" "$SUPPORT_DIR/"
 # Copy diagnose script if it exists
 if [ -f "$REPO_DIR/scripts/diagnose.sh" ]; then
     cp "$REPO_DIR/scripts/diagnose.sh" "$SUPPORT_DIR/"
     chmod +x "$SUPPORT_DIR/diagnose.sh"
 fi
+# Create bases directory for merge support
+mkdir -p "$SUPPORT_DIR/bases"
 echo "  ✓ Scripts kopiert nach $SUPPORT_DIR"
 
 # Create config if not exists (preserve existing config on update)

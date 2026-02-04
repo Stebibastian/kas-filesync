@@ -2,11 +2,14 @@
 """
 Menubar app for KAS Filesync.
 - Shows sync status (active/stopped)
+- Shows conflict status
 - Start/Stop the sync daemon
 - Open connection manager
+- Open conflict resolver
 - View sync log
 """
 
+import json
 import os
 import subprocess
 import sys
@@ -14,6 +17,7 @@ from datetime import datetime
 
 SUPPORT_DIR = os.path.expanduser("~/Library/Application Support/KAS Filesync")
 MENUBAR_LOG = os.path.join(SUPPORT_DIR, "sync-menubar.log")
+CONFLICTS_FILE = os.path.join(SUPPORT_DIR, "conflicts.json")
 
 def debug_log(msg):
     """Log debug messages to menubar log file."""
@@ -51,6 +55,7 @@ PID_FILE = os.path.join(SUPPORT_DIR, "sync-daemon.pid")
 
 ICON_ACTIVE = "🔄"
 ICON_STOPPED = "⏸️"
+ICON_CONFLICT = "⚠️"
 
 
 def is_daemon_running():
@@ -79,6 +84,24 @@ def is_daemon_running():
         return result.returncode == 0
     except Exception:
         return False
+
+
+def get_conflicts():
+    """Load and return active conflicts."""
+    if os.path.exists(CONFLICTS_FILE):
+        try:
+            with open(CONFLICTS_FILE, "r") as f:
+                data = json.load(f)
+                return data if data else {}
+        except:
+            pass
+    return {}
+
+
+def get_conflict_count():
+    """Return the number of active conflicts."""
+    conflicts = get_conflicts()
+    return len(conflicts)
 
 
 def start_daemon():
@@ -165,6 +188,7 @@ def get_last_log(n=10):
 class SyncMenuBarApp(rumps.App):
     def __init__(self):
         super().__init__("KAS Filesync", quit_button=None)
+        self.conflict_count = 0
         self.build_menu()
 
     def build_menu(self):
@@ -175,12 +199,21 @@ class SyncMenuBarApp(rumps.App):
         self.status_item = rumps.MenuItem("Status: ...")
         self.status_item.set_callback(None)
         self.menu.add(self.status_item)
+
+        # Conflict status
+        self.conflict_item = rumps.MenuItem("Konflikte: 0")
+        self.conflict_item.set_callback(None)
+        self.menu.add(self.conflict_item)
         self.menu.add(rumps.separator)
 
         # Toggle
         self.toggle_item = rumps.MenuItem("Sync stoppen", callback=self.toggle_sync)
         self.menu.add(self.toggle_item)
         self.menu.add(rumps.separator)
+
+        # Conflict resolver (only shown when conflicts exist)
+        self.resolve_item = rumps.MenuItem("Konflikte auflösen...", callback=self.open_resolver)
+        self.menu.add(self.resolve_item)
 
         # Open manager window
         manage_item = rumps.MenuItem("Verbindungen verwalten...", callback=self.open_manager)
@@ -200,14 +233,31 @@ class SyncMenuBarApp(rumps.App):
 
     def update_status(self):
         running = is_daemon_running()
-        if running:
+        self.conflict_count = get_conflict_count()
+
+        # Update icon based on status
+        if self.conflict_count > 0:
+            self.title = ICON_CONFLICT
+        elif running:
             self.title = ICON_ACTIVE
+        else:
+            self.title = ICON_STOPPED
+
+        # Update status text
+        if running:
             self.status_item.title = "Status: Aktiv"
             self.toggle_item.title = "Sync stoppen"
         else:
-            self.title = ICON_STOPPED
             self.status_item.title = "Status: Gestoppt"
             self.toggle_item.title = "Sync starten"
+
+        # Update conflict display
+        if self.conflict_count > 0:
+            self.conflict_item.title = f"⚠️ {self.conflict_count} Konflikt{'e' if self.conflict_count != 1 else ''}"
+            self.resolve_item.hidden = False
+        else:
+            self.conflict_item.title = "Konflikte: Keine"
+            self.resolve_item.hidden = True
 
     @rumps.timer(5)
     def periodic_check(self, _):
@@ -226,6 +276,39 @@ class SyncMenuBarApp(rumps.App):
         """Open the sync manager window."""
         manager_script = os.path.join(SUPPORT_DIR, "sync-manager.py")
         subprocess.Popen([sys.executable, manager_script])
+
+    def open_resolver(self, _):
+        """Open the conflict resolver window."""
+        conflicts = get_conflicts()
+        if not conflicts:
+            rumps.alert("Keine Konflikte", "Es gibt keine ungelösten Konflikte.")
+            return
+
+        # Show conflict summary and options
+        conflict_list = []
+        for key, info in conflicts.items():
+            filename = os.path.basename(info.get("source", "?"))
+            count = info.get("conflict_count", 0)
+            conflict_list.append(f"• {filename}: {count} Konflikt{'e' if count != 1 else ''}")
+
+        message = "Folgende Dateien haben Konflikte:\n\n" + "\n".join(conflict_list)
+        message += "\n\nÖffne die Dateien in einem Texteditor und suche nach den Konflikt-Markern:\n"
+        message += "<<<<<<< SOURCE\n=======\n>>>>>>> TARGET\n\n"
+        message += "Nach dem Bearbeiten wird der Konflikt automatisch aufgelöst."
+
+        response = rumps.alert(
+            title="Konflikte auflösen",
+            message=message,
+            ok="Dateien öffnen",
+            cancel="Schließen"
+        )
+
+        if response == 1:  # OK clicked
+            # Open conflicted files in default editor
+            for key, info in conflicts.items():
+                source = info.get("source")
+                if source and os.path.exists(source):
+                    subprocess.Popen(["open", source])
 
     def show_log(self, _):
         lines = get_last_log(12)
