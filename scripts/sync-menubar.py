@@ -10,18 +10,41 @@ Menubar app for KAS Filesync.
 import os
 import subprocess
 import sys
+from datetime import datetime
+
+SUPPORT_DIR = os.path.expanduser("~/Library/Application Support/KAS Filesync")
+MENUBAR_LOG = os.path.join(SUPPORT_DIR, "sync-menubar.log")
+
+def debug_log(msg):
+    """Log debug messages to menubar log file."""
+    try:
+        ts = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+        with open(MENUBAR_LOG, "a") as f:
+            f.write(f"{ts} {msg}\n")
+    except Exception:
+        pass
+
+debug_log("=== Menubar app starting ===")
+debug_log(f"Python: {sys.executable}")
+debug_log(f"Python version: {sys.version}")
+debug_log(f"sys.path: {sys.path}")
 
 # Hide Python icon from Dock
 try:
     import AppKit
     # NSApplicationActivationPolicyAccessory = 1 (no dock icon, but can have menu bar)
     AppKit.NSApplication.sharedApplication().setActivationPolicy_(1)
-except Exception:
-    pass
+    debug_log("AppKit loaded, dock icon hidden")
+except Exception as e:
+    debug_log(f"AppKit error (non-fatal): {e}")
 
-import rumps
+try:
+    import rumps
+    debug_log(f"rumps loaded successfully from {rumps.__file__}")
+except ImportError as e:
+    debug_log(f"FATAL: Cannot import rumps: {e}")
+    raise
 
-SUPPORT_DIR = os.path.expanduser("~/Library/Application Support/KAS Filesync")
 DAEMON_SCRIPT = os.path.join(SUPPORT_DIR, "sync-files.py")
 LOG_FILE = os.path.join(SUPPORT_DIR, "sync-files.log")
 PID_FILE = os.path.join(SUPPORT_DIR, "sync-daemon.pid")
@@ -60,23 +83,40 @@ def is_daemon_running():
 
 def start_daemon():
     """Start the sync daemon."""
+    debug_log("start_daemon() called")
     if is_daemon_running():
+        debug_log("Daemon already running, skipping start")
         return True
 
     try:
         # Use the same Python that's running this script
         python_path = sys.executable
+        debug_log(f"Starting daemon with Python: {python_path}")
+        debug_log(f"Daemon script: {DAEMON_SCRIPT}")
+
+        if not os.path.exists(DAEMON_SCRIPT):
+            debug_log(f"ERROR: Daemon script not found: {DAEMON_SCRIPT}")
+            rumps.alert("Fehler", f"Daemon-Script nicht gefunden: {DAEMON_SCRIPT}")
+            return False
+
+        stdout_log = os.path.join(SUPPORT_DIR, "sync-daemon-stdout.log")
+        stderr_log = os.path.join(SUPPORT_DIR, "sync-daemon-stderr.log")
+        debug_log(f"stdout -> {stdout_log}")
+        debug_log(f"stderr -> {stderr_log}")
+
         proc = subprocess.Popen(
             [python_path, DAEMON_SCRIPT],
-            stdout=open(os.path.join(SUPPORT_DIR, "sync-daemon-stdout.log"), "a"),
-            stderr=open(os.path.join(SUPPORT_DIR, "sync-daemon-stderr.log"), "a"),
+            stdout=open(stdout_log, "a"),
+            stderr=open(stderr_log, "a"),
             start_new_session=True
         )
         # Save PID
         with open(PID_FILE, "w") as f:
             f.write(str(proc.pid))
+        debug_log(f"Daemon started with PID {proc.pid}")
         return True
     except Exception as e:
+        debug_log(f"ERROR starting daemon: {e}")
         rumps.alert("Fehler", f"Konnte Daemon nicht starten: {e}")
         return False
 
@@ -198,4 +238,13 @@ class SyncMenuBarApp(rumps.App):
 
 
 if __name__ == "__main__":
-    SyncMenuBarApp().run()
+    debug_log("Creating SyncMenuBarApp instance...")
+    try:
+        app = SyncMenuBarApp()
+        debug_log("SyncMenuBarApp created, calling run()")
+        app.run()
+    except Exception as e:
+        debug_log(f"FATAL ERROR in menubar app: {e}")
+        import traceback
+        debug_log(traceback.format_exc())
+        raise
