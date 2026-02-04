@@ -50,9 +50,9 @@ DAEMON_SCRIPT = os.path.join(SUPPORT_DIR, "sync-files.py")
 LOG_FILE = os.path.join(SUPPORT_DIR, "sync-files.log")
 PID_FILE = os.path.join(SUPPORT_DIR, "sync-daemon.pid")
 
-# Simple text icons (emojis can cause issues on some systems)
-ICON_ACTIVE = "KAS"
-ICON_STOPPED = "kas"
+# Emoji icons for menubar
+ICON_ACTIVE = "🔄"
+ICON_STOPPED = "⏸️"
 
 
 def is_daemon_running():
@@ -167,7 +167,7 @@ def get_last_log(n=10):
 class SyncMenuBarApp(rumps.App):
     def __init__(self):
         debug_log("SyncMenuBarApp.__init__ starting")
-        super().__init__("KAS", quit_button=None)  # Start with simple title
+        super().__init__("KAS Filesync", quit_button=None)
         debug_log("rumps.App.__init__ completed")
         self.build_menu()
         debug_log("build_menu() completed")
