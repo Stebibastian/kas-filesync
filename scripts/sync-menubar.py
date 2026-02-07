@@ -172,7 +172,7 @@ def stop_daemon():
     return stopped
 
 
-def get_last_log(n=10):
+def get_last_log(n=50):
     try:
         if not os.path.exists(LOG_FILE):
             return "Kein Log vorhanden"
@@ -183,6 +183,52 @@ def get_last_log(n=10):
         return result.stdout.strip() or "Log leer"
     except Exception:
         return "Fehler beim Lesen"
+
+
+def show_scrollable_log():
+    """Show log in a scrollable window using AppKit."""
+    try:
+        from AppKit import (
+            NSAlert, NSAlertStyleInformational, NSScrollView,
+            NSTextView, NSFont, NSMakeRect, NSBezelBorder,
+            NSViewWidthSizable, NSViewHeightSizable
+        )
+
+        log_content = get_last_log(100)
+
+        alert = NSAlert.alloc().init()
+        alert.setMessageText_("Sync Log")
+        alert.setInformativeText_("Die letzten 100 Log-Einträge:")
+        alert.setAlertStyle_(NSAlertStyleInformational)
+        alert.addButtonWithTitle_("Schließen")
+        alert.addButtonWithTitle_("Log-Datei öffnen")
+
+        # Create scroll view with text view
+        scroll_view = NSScrollView.alloc().initWithFrame_(NSMakeRect(0, 0, 500, 300))
+        scroll_view.setHasVerticalScroller_(True)
+        scroll_view.setHasHorizontalScroller_(True)
+        scroll_view.setBorderType_(NSBezelBorder)
+        scroll_view.setAutoresizingMask_(NSViewWidthSizable | NSViewHeightSizable)
+
+        # Create text view
+        text_view = NSTextView.alloc().initWithFrame_(NSMakeRect(0, 0, 480, 300))
+        text_view.setEditable_(False)
+        text_view.setFont_(NSFont.fontWithName_size_("Menlo", 11))
+        text_view.setString_(log_content)
+
+        scroll_view.setDocumentView_(text_view)
+        alert.setAccessoryView_(scroll_view)
+
+        response = alert.runModal()
+
+        # If "Log-Datei öffnen" clicked
+        if response == 1001:
+            subprocess.Popen(["open", LOG_FILE])
+
+    except Exception as e:
+        debug_log(f"Error showing scrollable log: {e}")
+        # Fallback to simple alert
+        rumps.alert(title="Sync Log", message=get_last_log(30))
 
 
 class SyncMenuBarApp(rumps.App):
@@ -311,8 +357,7 @@ class SyncMenuBarApp(rumps.App):
                     subprocess.Popen(["open", source])
 
     def show_log(self, _):
-        lines = get_last_log(12)
-        rumps.alert(title="Sync Log", message=lines)
+        show_scrollable_log()
 
     def quit_app(self, _):
         # Stop daemon when quitting
